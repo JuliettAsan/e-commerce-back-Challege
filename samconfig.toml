@@ -1,0 +1,10 @@
+version = 0.1
+[default.deploy.parameters]
+stack_name = "products-ecommerce"
+resolve_s3 = true
+s3_prefix = "products-ecommerce"
+region = "sa-east-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "CognitoUserPoolArn=\"arn:aws:cognito-idp:sa-east-1:309940631035:userpool/sa-east-1_nAMuKzA1t\" AppName=\"products-ecommerce\""
+image_repositories = []

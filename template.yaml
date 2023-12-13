@@ -1,0 +1,272 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Serverless patterns - Amazon API Gateway REST API with Cognito User Pools Authorizer
+
+Globals:
+  Function:
+    Runtime: nodejs14.x
+    CodeUri: app/
+
+Parameters:
+  CognitoUserPoolArn:
+    Description: ARN of the Cognito User Pool
+    Type: String
+
+  AppName:
+    Description: Name of Application
+    Type: String
+    Default: products-ecommerce
+
+Resources:
+  # DynamoDB Table
+  DynamoDBTable:
+    Type: "AWS::DynamoDB::Table"
+    Properties:
+      TableName: products-ecommerce
+      # A list of attributes that describe the key schema for the DynamoDB table and indexes.
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+        - AttributeName: startDate
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: date-index
+          KeySchema:
+            - AttributeName: startDate
+              KeyType: HASH
+            - AttributeName: id
+              KeyType: RANGE
+          Projection:
+            ProjectionType: INCLUDE
+            NonKeyAttributes:
+              - id
+              - owner
+              - startDate
+              - name
+              - creationAt
+
+          ProvisionedThroughput:
+            ReadCapacityUnits: 5
+            WriteCapacityUnits: 5
+
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+
+  # APIGateway REST API
+  AppApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub "${AppName}-api"
+      Description: Cognito User Pools Authorizer REST API
+
+  RootMethodGet:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref AppApi
+      ResourceId: !GetAtt AppApi.RootResourceId
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri:
+          !Join [
+            "",
+            [
+              "arn:aws:apigateway:",
+              !Ref AWS::Region,
+              ":lambda:path/2015-03-31/functions/",
+              !GetAtt MainFunction.Arn,
+              "/invocations",
+            ],
+          ]
+
+  productsResource:
+    Type: "AWS::ApiGateway::Resource"
+    Properties:
+      RestApiId: !Ref AppApi
+      ParentId: !GetAtt AppApi.RootResourceId
+      PathPart: "products"
+
+  productsMethodPost:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref AppApi
+      ResourceId: !Ref productsResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri:
+          !Join [
+            "",
+            [
+              "arn:aws:apigateway:",
+              !Ref AWS::Region,
+              ":lambda:path/2015-03-31/functions/",
+              !GetAtt MainFunction.Arn,
+              "/invocations",
+            ],
+          ]
+
+  productsMethodGet:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref AppApi
+      ResourceId: !Ref productsResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri:
+          !Join [
+            "",
+            [
+              "arn:aws:apigateway:",
+              !Ref AWS::Region,
+              ":lambda:path/2015-03-31/functions/",
+              !GetAtt MainFunction.Arn,
+              "/invocations",
+            ],
+          ]
+
+  # products resource
+  productsIDResource:
+    Type: "AWS::ApiGateway::Resource"
+    Properties:
+      RestApiId: !Ref AppApi
+      ParentId: !Ref productsResource
+      PathPart: "{id}"
+
+  # GET Method with Cognito User Pools Authorizer enabled
+  productsIDMethodGet:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref AppApi
+      ResourceId: !Ref productsIDResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri:
+          !Join [
+            "",
+            [
+              "arn:aws:apigateway:",
+              !Ref AWS::Region,
+              ":lambda:path/2015-03-31/functions/",
+              !GetAtt MainFunction.Arn,
+              "/invocations",
+            ],
+          ]
+
+  # GET Method with Cognito User Pools Authorizer enabled
+  productsIDMethodPut:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref AppApi
+      ResourceId: !Ref productsIDResource
+      HttpMethod: PUT
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri:
+          !Join [
+            "",
+            [
+              "arn:aws:apigateway:",
+              !Ref AWS::Region,
+              ":lambda:path/2015-03-31/functions/",
+              !GetAtt MainFunction.Arn,
+              "/invocations",
+            ],
+          ]
+
+  # Delete Method with Cognito User Pools Authorizer enabled
+  productsIDMethodDelete:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref AppApi
+      ResourceId: !Ref productsIDResource
+      HttpMethod: DELETE
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri:
+          !Join [
+            "",
+            [
+              "arn:aws:apigateway:",
+              !Ref AWS::Region,
+              ":lambda:path/2015-03-31/functions/",
+              !GetAtt MainFunction.Arn,
+              "/invocations",
+            ],
+          ]
+
+  # Cognito User Pools Authorizer
+  AuthorizersCognitoUserPools:
+    Type: AWS::ApiGateway::Authorizer
+    Properties:
+      Name: !Sub "${AppName}-CognitoAuthorizer"
+      Type: COGNITO_USER_POOLS
+      RestApiId: !Ref AppApi
+      IdentitySource: method.request.header.Authorization
+      ProviderARNs:
+        - !Ref CognitoUserPoolArn
+
+  MainFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.handler
+      Timeout: 20
+      Environment:
+        Variables:
+          products_TABLE_NAME: !Ref DynamoDBTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref DynamoDBTable
+
+  # Permission to allow Lambda invocation from API Gateway
+  MainFunctionAccessPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref MainFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${AppApi}/*/*/*
+
+  Deployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - RootMethodGet
+      - productsMethodPost
+      - productsMethodGet
+      - productsIDMethodGet
+      - productsIDMethodPut
+      - productsIDMethodDelete
+
+    Properties:
+      RestApiId: !Ref AppApi
+
+  Stage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      StageName: prod
+      RestApiId: !Ref AppApi
+      DeploymentId: !Ref Deployment
+
+Outputs:
+  # API Gateway endpoint to be used during
+  AppApiEndpoint:
+    Description: API Endpoint
+    Value: !Sub "https://${AppApi}.execute-api.${AWS::Region}.amazonaws.com/prod"
